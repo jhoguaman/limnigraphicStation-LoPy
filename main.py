@@ -7,6 +7,8 @@ import pycom
 import time
 import sys
 
+
+############################-----Disable WiFi-----##############################
 wlan = WLAN()
 wlan.deinit()
 
