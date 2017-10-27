@@ -121,7 +121,6 @@ def obtener_ds1307():
     mesint=code_ds1307(mes)
     ann=i2c.readfrom_mem(0x68,6,1)
     annint=code_ds1307(ann)
-    print('seg--min - horas --dia -- mes -- anio')
     print(segundosint, minutosint, horasint, diaint, mesint, annint)
     i2c.deinit()
 
@@ -142,7 +141,6 @@ def sinc_RTC_ds1307():
     mesint=code_ds1307(mes)
     ann=i2c.readfrom_mem(0x68,6,1)
     annint=code_ds1307(ann)+2000
-    #print(annint,mesint, diaint, horasint, minutosint, segundosint)
     rtc.init((annint, mesint, diaint, horasint, minutosint, segundosint, 5000, 0),source=RTC.INTERNAL_RC)
     i2c.deinit()
     print(rtc.now())
@@ -156,7 +154,7 @@ pathLogsWl='/flash/logsDir/wl'
 pathLogsBl='/flash/logsDir/bl'
 pathCurrentFile='/flash/logsDir/currentFile'
 
-#clockSynchronization: Sincronización del rtc con el dateTime recibido por el gps
+#clockSynchronization: Sincronización del rtc-LoPy con el dateTime recibido por el gps o ds1307
 def clockSynchronization(dateTime):
     rtc.init(dateTime)
     print(rtc.now())
@@ -196,7 +194,8 @@ def configFile():
         time.sleep(0.1)
     return config
 
-#logsDir: Verifica que esté creado el dir para el almacenamiento de logs, si no existe lo crea
+#logsDir
+#Verifica que esté creado el dir para el almacenamiento de logs, si no existe lo crea
 def logsDir():
     try:
         print('reading logsDir')
@@ -207,25 +206,28 @@ def logsDir():
         os.mkdir('/flash/logsDir')
         time.sleep(0.1)
 
-#readFile: Lee un archivo, path:ubicación del archivo, mode: tipo de lectura 'r' o 'rb'
-#typeFile:En caso de haber mas de un archivo con nombres similares, se especifica la variacion que tiene al final
+##############################----readFile----##################################
+#Lee un archivo, path:ubicación del archivo, mode: tipo de lectura 'r' o 'rb'
+#typeFile:En caso de haber archivos con nombres similares, se especifica la variacion
+#i.e config01 y config02, config es el path, 01 y 02 corresponden al typeFile
 def readFile(path,mode,typeFile):
     f = open(path+str(typeFile), mode)
     config=f.readall()
     f.close()
     return config
 
-#writeFile: Lee un archivo, path:ubicación del archivo, mode: tipo de escritura 'w' o 'wb'
-#typeFile:En caso de haber mas de un archivo con nombres similares, se especifica la variacion que tiene al final
-#file:archivo a guardar
+##############################----writeFile----#################################
+#Escribe un archivo, path:ubicación del archivo, mode: tipo de escritura 'w' o 'wb'
+#files:archivo a guardar
+#typeFile:En caso de haber archivos con nombres similares, se especifica la variacion
+#i.e config01 y config02, config es el path, 01 y 02 corresponden al typeFile
 def writeFile(path,mode,typeFile,files):
     f = open(str(path)+str(typeFile), mode)
     f.write(files)
     f.close()
-    #print('saved fiel:', ustruct.unpack('HHHH',files))
 
-
-#slope: calcula la pendiente en base a los dos puntos almacenados en config,
+#############################----slope----######################################
+#calcula la pendiente en base a los dos puntos almacenados en config,
 #devuelve equationParameters: P1x,P1y,pendiente
 def slope(config):
     config=ustruct.unpack('HHHH',config)
@@ -233,8 +235,14 @@ def slope(config):
     equationParameters=(config[0],config[1],m)
     return equationParameters
 
-#calibrationType: Llamado desde el method:wifi, redirecciona a los métodos:
-#h0Calibration, h1Calibration o finishCalibration. Según sea el parámetro a calibrar
+###########################----calibrationType----##############################
+#Llamado desde el method:wifi, redirecciona a los métodos:
+    #h0Calibration:             Calibra P1
+    #h1Calibration:             Calibra P2
+    #clockSynchronizationApp:  Sincroniza el relog del LoPy con la app.
+    #restoreConfigFile:         Elimina el config generado por la app.
+    #levelWaterUpdate:          Envía a la app nos niveles de agua
+    #finishCalibration:         Finaliza la conexión con la app.
 def calibrationType(argCalibration):
     print('argCalibration: ', argCalibration[0])
     switcher = {
@@ -267,9 +275,7 @@ def h1Calibration(hx):
     return True,msg
 
 def clockSynchronizationApp(date):
-    #print(date[1:])
     dateTime=time.gmtime(int(date[1:]))
-    #print(time.gmtime(int(date[1:])))
     msg='Fecha Actualizada'
     clockSynchronization(dateTime)
     ds1307init_sinc()
@@ -299,12 +305,13 @@ def levelWaterUpdate(none):
     msg='-'+msg+' '+tStamp
     return True,msg
 
-#finishCalibration: finaliza la calibración, desactiva el wifi
 def finishCalibration(none):
     msg='Finish wifi LoPy'
     pycom.rgbled(False)
     return False,msg
-#wifi:Activa el wifi ssid:wipy-wlan, clave: ucuenca1234. Levante un socket con ipServer:"host" y puerto:"port" (definidos al inicio)
+
+
+#wifi:Activa el wifi ssid:waterLevel, clave: ucuenca1234. Levante un socket con ipServer:"host" y puerto:"port" (definidos al inicio)
 #luego del proceso de calibración se desactiva el wifi.
 def wifi():
     print('wifi init')
@@ -330,9 +337,6 @@ def wifi():
 
         recibido = sc.recv(16)
         print('valor recibido :', recibido)
-        #print('tipo :', type(recibido))
-        #dato=recibido.decode("utf-8")
-        #print('dato decode',dato)
         print('dato[0]: ',recibido[0])
 
         wifiSocket, msg=calibrationType(recibido)
@@ -344,7 +348,8 @@ def wifi():
     wlan.deinit()
 
 
-#waterLevel:Calcula la profundidad del agua, Vx:nuevo valor del sensor,
+############################----waterLevel----##################################
+#Calcula la profundidad del agua, Vx:nuevo valor del sensor,
 #equationParameters: contiene los valores Punto y pendiente de la
 #ecuación lineal, retorna hx en [mm]
 def waterLevel(equationParameters,vX):
@@ -352,21 +357,20 @@ def waterLevel(equationParameters,vX):
     print('altura Vx: ',hX)
     if hX<0:
         hX=0
-    hX=round(hX)#hX=ustruct.pack('H',round(abs(hX))) ####quitar abs y hacer un if para valores negativos
+    hX=round(hX)
     return hX
 
-#batteryLevel: devuelve el nivel de voltaje medido en función del valor medido en el channel_1
+################################----batteryLevel----############################
+#Devuelve el nivel de voltaje medido en función del valor analógico medido en channel_1
 def batteryLevel(batt):
     volBatt=round((batt*1181)/22046)
     return volBatt
-
 
 #_measurementAlarm: alarma de mediciones
 def _measurementAlarm(alarm):
     print("measurement alarm")
     global measurementAlarm, timeStamp_measurement
     measurementAlarm.cancel()
-    #print(timeStamp_measurement[:6])
     timeStamp_measurement=time.mktime(time.gmtime())
     global measurementMain
     measurementMain=True
@@ -413,7 +417,7 @@ print('equationParameters',equationParameters)
 logsDir()
 
 ###########---CALIBRACIÓN DEL CRONÓMETRO PARA LA TOMA DE DATOS---###############
-#measurementTime: tiempo en minutos para la toma de datos,
+#measurementTime: tiempo en minutos para la adquisión de datos.
 global measurementTime
 measurementTime=5
 
@@ -439,7 +443,7 @@ if machine.wake_reason()[0]==1:
             time.sleep(1)
             wifiMain=True
 
-segM=segAlarm()     #segundos que faltan para los siguientes measurementTime(5min)
+segM=segAlarm()     #segundos faltantes para los siguientes measurementTime(5min)
 if segM>15 and wifiMain==False:
     print('init sleep',segM-10)
     deepsleep((segM-10)*1000)
@@ -463,7 +467,7 @@ while True:
     time.sleep(1)
     if wifiMain:
         print('ingresa a la calibracion mediante WIFI')
-        time.sleep(2)
+        time.sleep(1)
         wifi()
         print('alarma activada al finalizar el wifi cada:',segM)
         print('init program: new configFile after wifi configuration')
