@@ -7,7 +7,6 @@ import pycom
 import time
 import sys
 
-
 ############################-----Disable WiFi-----##############################
 wlan = WLAN()
 wlan.deinit()
@@ -29,9 +28,9 @@ _CHANNEL2=const(0xE3)
 _CHANNEL3=const(0xF3)
 
 #####################--ID--station and sensor-2bytes---#########################
-stationId=7     #4bits
-sensorIdWl=18     #12bits
-sensorIdBl=20     #12bits
+stationId=7         #4bits
+sensorIdWl=18       #12bits
+sensorIdBl=20       #12bits
 stationId_bits="{0:b}".format(stationId)
 sensorIdWl_bits="{0:b}".format(sensorIdWl)
 sensorIdBl_bits="{0:b}".format(sensorIdBl)
@@ -68,7 +67,6 @@ def ds1307init_sinc():
     ann_rtc_ext= str(reloj_rtc_int[0])
     ann_rtc_ext_hex = int(decode_ds1307(ann_rtc_ext[2:4]))
 
-    #i2c = I2C(0, I2C.MASTER, baudrate=100000)
     i2c.init()
     i2c.writeto(0x68,chr(0xD0))
     i2c.writeto(0x68,chr(0))
@@ -99,7 +97,7 @@ def decode_ds1307(valor_rtc_int):
 
 def code_ds1307(valor_ds1307):
     valor=hex(ord(valor_ds1307))
-    valor1= int(valor) & 15                     #segundos.encode("hex")
+    valor1= int(valor) & 15
     valor2= int(valor)>>4
     valorint= int(str(valor2)+str(valor1))
     return valorint
@@ -146,6 +144,7 @@ def sinc_RTC_ds1307():
     print(rtc.now())
 ##############################################################################
 
+###############################----Paths----####################################
 #pathConfigFile:archivo de configuracion, contiene el Vmin y la pendiente
 #pathLogsWl:directorio donde se almacenan archivos diarios con la medida del nivel de agua cada ...
 #pathCurrentFile:archivo que almacena el hx cada 5min
@@ -164,7 +163,7 @@ def clockSynchronization(dateTime):
 #Lee los valores de configuracion de la memoria flash,
 #existen dos archivos de configuracion: wl400_00 y wl400_01, el 1ero se crea
 #por defecto con parámetros pre-establecidos, y el 2do se crea al momento de
-#calibrar el dispositivo por medio del wifi.
+#calibrar el dispositivo mediante WiFi.
 def configFile():
     try:
         files=os.listdir('/flash/configFile')
@@ -187,10 +186,8 @@ def configFile():
         hMin=80
         v1=2902          #~mV
         h1=130           #altura[mm] correspondiente a V1
-        ##config=generateConfig(vMin,v1,h1)
         config=ustruct.pack('HHHH',vMin,hMin,v1,h1)     #estructura el archivo de configuracion 2bytes para cada valor
-        #creación del directorio configFile que contendrá los archivos wl400_0x
-        os.mkdir('/flash/configFile')
+        os.mkdir('/flash/configFile')       #Directorio configFile que contendrá los archivos wl400_0x
         writeFile(pathConfigFile,'wb',1,config)
         time.sleep(0.1)
     return config
@@ -256,7 +253,8 @@ def calibrationType(argCalibration):
     }
     func = switcher.get(argCalibration[0])       # Get the function from switcher dictionary
     return func(argCalibration)                  # Execute the function
-#h0Calibration:almacena el valor de Vmin
+#############################----h0Calibration----##############################
+#almacena el valor de P1: P1(vMin,0).
 def h0Calibration(none):
     ads1115Write(_CHANNEL0)
     vMin=ads1115Read()
@@ -264,7 +262,8 @@ def h0Calibration(none):
     writeFile(pathConfigFile,'wb',2,p1)
     msg='Calibración de P1 realizada con éxito'
     return True, msg
-#h1Calibration:almacena el valor Vx junto al Vmin (Vmin_Vx)
+##############################----h1Calibration----#############################
+#almacena el valor de P2: P2(Vx,hx)
 def h1Calibration(hx):
     ads1115Write(_CHANNEL0)
     v1=ads1115Read()
@@ -274,14 +273,14 @@ def h1Calibration(hx):
     writeFile(pathConfigFile,'wb',2,config)
     msg='Calibración de P2 realizada con éxito'
     return True,msg
-
+#########################----clockSynchronizationApp----########################
 def clockSynchronizationApp(date):
     dateTime=time.gmtime(int(date[1:]))
     msg='Fecha Actualizada'
     clockSynchronization(dateTime)
     ds1307init_sinc()
     return True,msg
-
+############################----restoreConfigFile----###########################
 def restoreConfigFile(none):
     if len(os.listdir('/flash/configFile'))==1:
         msg='Actualmente se ejecuta con la configuración de Fabrica'
@@ -289,65 +288,57 @@ def restoreConfigFile(none):
         os.remove(pathConfigFile+'2')
         msg='Restaurado a configuración de Fabrica'
     return True,msg
-
+#############################----levelWaterUpdate----###########################
 def levelWaterUpdate(none):
     ads1115Write(_CHANNEL0)
     vX=ads1115Read()
     config=configFile()
     equationParameters=slope(config)
     hX=waterLevel(equationParameters,vX)
-    print(hX)#print(ustruct.unpack('H', hX)[0])
-
+    print(hX)
     tStamp=rtc.now()
     print(tStamp[:6])
     tStamp=str(tStamp[0])+'/'+str(tStamp[1])+'/'+str(tStamp[2])+' '+str(tStamp[3])+':'+str(tStamp[4])+':'+str(tStamp[5])
-    msg=str(hX)#msg=(str(ustruct.unpack('H', hX)[0]))
-
+    msg=str(hX)
     msg='-'+msg+' '+tStamp
     return True,msg
-
+############################----finishCalibration----###########################
 def finishCalibration(none):
     msg='Finish wifi LoPy'
     pycom.rgbled(False)
     return False,msg
 
-
-#wifi:Activa el wifi ssid:waterLevel, clave: ucuenca1234. Levante un socket con ipServer:"host" y puerto:"port" (definidos al inicio)
+##################################----WiFi----##################################
+#Activa el WiFi ssid:waterLevel, clave: ucuenca1234.
+#Parámetros del socket con ipServer:"host" y puerto:"port" (definidos al inicio)
 #luego del proceso de calibración se desactiva el wifi.
 def wifi():
     print('wifi init')
     pycom.rgbled(0x009999) # blue
     wlan = WLAN(mode=WLAN.AP, ssid='waterLevel', auth=(WLAN.WPA2,'ucuenca1234'), channel=7, antenna=WLAN.INT_ANT)
     serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
     try:
         serversocket.bind(socket.getaddrinfo(host,port)[0][-1])     #ipServer 192.168.4.1
     except Exception as e:
         print('bind failed, error code: ',str(e[0]))
         sys.exit()
-
     serversocket.listen(1)
     print('socket is now listening over port: ', port)
 
     wifiSocket=True
-
     while (wifiSocket):
         print('socket init')
         sc, addr = serversocket.accept()
         print('sc: ',sc,' addr: ',addr)
-
         recibido = sc.recv(16)
         print('valor recibido :', recibido)
         print('dato[0]: ',recibido[0])
-
         wifiSocket, msg=calibrationType(recibido)
         sc.send(msg)
-
     print('closing wifi and socket')
     sc.close()
     serversocket.close()
     wlan.deinit()
-
 
 ############################----waterLevel----##################################
 #Calcula la profundidad del agua, Vx:nuevo valor del sensor,
@@ -361,13 +352,14 @@ def waterLevel(equationParameters,vX):
     hX=round(hX)
     return hX
 
-################################----batteryLevel----############################
+##############################----batteryLevel----##############################
 #Devuelve el nivel de voltaje medido en batt (valor analógico del channel_1)
 def batteryLevel(batt):
     volBatt=round((batt*1181)/22046)
     return volBatt
 
-#_measurementAlarm: alarma de mediciones
+#############################----_measurementAlarm----##########################
+#alarma para realizar las mediciones.
 def _measurementAlarm(alarm):
     print("measurement alarm")
     global measurementAlarm, timeStamp_measurement
@@ -376,6 +368,8 @@ def _measurementAlarm(alarm):
     global measurementMain
     measurementMain=True
 
+##############################----activeAlarmM----##############################
+#Activa la alarma _measurementAlarm cada alarm [segundos]
 def activeAlarmM(segM):
     print('alarma activada cada',segM)
     measurementAlarm = Timer.Alarm(_measurementAlarm, segM, periodic=True)
@@ -384,13 +378,16 @@ def activeAlarmM(segM):
 def loraTransmission(value):
     print('loRaTransmission',value)
 
+#############################----ads1115Write----###############################
+#Configura el ads1115 en modo Single-Shot, y habilita el canal (channel)
 def ads1115Write(channel):
     data = ustruct.pack('>BBB', 0x01,channel,0x83)
     i2c.init()
     i2c.writeto(0x48, data)
     time.sleep(0.5)
     i2c.deinit()
-
+################################----ads1115Read----#############################
+#Adquiere los datos analógicos de channel(habilitado en ads1115Write)
 def ads1115Read():
     i2c.init()
     data = i2c.readfrom_mem(0x48, 0x00, 2 )
@@ -400,6 +397,8 @@ def ads1115Read():
     print(vX)
     return vX
 
+#################################----segAlarm----###############################
+#Segundos que faltan para los siguientes measurementTime
 def segAlarm():
     timeStampM=time.localtime()
     minM = measurementTime-(timeStampM[4] % measurementTime)
@@ -407,6 +406,9 @@ def segAlarm():
     print('timeStampM:segAlarm',timeStampM)
     return segM
 
+################################################################################
+##################################-----MAIN-----################################
+################################################################################
 rtc = RTC()
 sinc_RTC_ds1307()
 print('hora actual: ',rtc.now())
@@ -420,22 +422,24 @@ logsDir()
 ###########---CALIBRACIÓN DEL CRONÓMETRO PARA LA TOMA DE DATOS---###############
 #measurementTime: tiempo en minutos para la adquisión de datos.
 global measurementTime
-measurementTime=5
+measurementTime=1
+sendTime=1      #tiempo para hacer la transmision [minutos]
 
 P8 = Pin('P8', mode=Pin.IN, pull=Pin.PULL_UP)
 machine.pin_deepsleep_wakeup([P8], machine.WAKEUP_ALL_LOW, True)
 wifiMain=False
 
-
+###########################----WAKEREASON_PIN----###############################
+#Test a P8 durante 3[segundos] para confirmar la activación del WiFi
 if machine.wake_reason()[0]==1:
     print('PIN sleep')
     i=0
     while P8()==0:
         print('dentro del while')
         pycom.rgbled(0x009999) # blue
-        time.sleep(1)
+        time.sleep(0.5)
         pycom.rgbled(False)
-        time.sleep(1)
+        time.sleep(0.5)
         i=i+1
         if i==3:
             pycom.rgbled(0x009900) # RED
@@ -448,21 +452,14 @@ segM=segAlarm()     #segundos faltantes para los siguientes measurementTime(5min
 if segM>15 and wifiMain==False:
     print('init sleep',segM-10)
     deepsleep((segM-10)*1000)
-    ######---ACTIVAR LA ALARMA---######
-    measurementAlarm = activeAlarmM(segM)
-
 if segM<=15 and wifiMain==False:
-    ######---ACTIVAR LA ALARMA---######
-    measurementAlarm = activeAlarmM(segM)
-
+    segM=segAlarm()     #segundos faltantes para los siguientes measurementTime(5min)
+    measurementAlarm = activeAlarmM(segM)   #activa la alarma cada segM
 
 transmissionMain=False
 measurementMain=False
 
-sendTime=5      #tiempo para hacer la transmision en minutos
-#storeTime=3     #generacion del archivo para el almacenamiento de datos: cada hora (la poscicion 3 representa la hora- 2 el día)
 typeWrite="wb"
-
 
 while True:
     time.sleep(1)
@@ -555,16 +552,14 @@ while True:
             print('sleep:',segM-10)
             deepsleep((segM-10)*1000)
 
-
     if transmissionMain:
         print('TRANSMISION - LoRa')
 
-        #***********************TRANSMISIÓN-LORA**********************************
-        #pkg_transmit = ustruct.pack(">HIHH",IDWl,time.mktime(timeStamp_measurement),hX,volBatt)
-        #pkg = ustruct.pack(_LORA_PKG_FORMAT % len(pkg_transmit), DEVICE_ID, len(pkg_transmit),0,pkg_transmit)  # type_pkg=0 paquete de datos
-        #lora_sock.send(pkg)
-        #**************************************************************************
-        #**************************************************************************
+        ######################-----TRANSMISIÓN-LORA-----########################
+        pkg_transmit = ustruct.pack(">HIHH",IDWl,timeStamp_measurement,hX,volBatt)
+        pkg = ustruct.pack(_LORA_PKG_FORMAT % len(pkg_transmit), DEVICE_ID, len(pkg_transmit),0,pkg_transmit)  # type_pkg=0 paquete de datos
+        lora_sock.send(pkg)
+        ########################################################################
 
         #leer datos int para corroborar el almacenamiento*********
         #*********************************************************
@@ -576,7 +571,7 @@ while True:
         #print(currentFileInt)
         #*********************************************************
         #loraTransmission(currentFileBin)
-        typeWrite="wb"          #luego de la trasmision y el almacenamiento de value que representa el resultado del currentFile. se sobreescribe el currentFile
+        typeWrite="wb"
         transmissionMain=False
 
         segM=segAlarm()     #segundos que faltan para los siguientes measurementTime(5min)
