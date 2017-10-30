@@ -239,7 +239,7 @@ def slope(config):
 #Llamado desde el method:wifi, redirecciona a los métodos:
     #h0Calibration:             Calibra P1
     #h1Calibration:             Calibra P2
-    #clockSynchronizationApp:  Sincroniza el relog del LoPy con la app.
+    #clockSynchronizationApp:   Sincroniza el reloj del LoPy con la app.
     #restoreConfigFile:         Elimina el config generado por la app.
     #levelWaterUpdate:          Envía a la app nos niveles de agua
     #finishCalibration:         Finaliza la conexión con la app.
@@ -361,7 +361,7 @@ def waterLevel(equationParameters,vX):
     return hX
 
 ################################----batteryLevel----############################
-#Devuelve el nivel de voltaje medido en función del valor analógico medido en channel_1
+#Devuelve el nivel de voltaje medido en batt (valor analógico del channel_1)
 def batteryLevel(batt):
     volBatt=round((batt*1181)/22046)
     return volBatt
