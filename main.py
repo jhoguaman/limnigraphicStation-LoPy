@@ -168,8 +168,7 @@ def configFile():
     try:
         files=os.listdir('/flash/configFile')
         lenFile=len(files)
-        print('lenFile :', lenFile)
-        print('leer :', files[lenFile-1])
+        print('read:', files[lenFile-1])
         if files[lenFile-1]=='wl400_0'+str(lenFile):
             if os.stat(pathConfigFile+str(lenFile))[6]==8:
                 print('configFile a leer:', pathConfigFile+str(lenFile))
@@ -196,7 +195,6 @@ def configFile():
 #Verifica que esté creado el dir para el almacenamiento de logs, si no existe lo crea
 def logsDir():
     try:
-        print('reading logsDir')
         files=os.listdir('logsDir')
         #os.remove(pathCurrentFile)
     except Exception as e:
@@ -411,7 +409,6 @@ def segAlarm():
 ################################################################################
 rtc = RTC()
 sinc_RTC_ds1307()
-print('hora actual: ',rtc.now())
 
 config=configFile()
 print('config parameters: ',ustruct.unpack('HHHH',config))
@@ -420,10 +417,9 @@ print('equationParameters',equationParameters)
 logsDir()
 
 ###########---CALIBRACIÓN DEL CRONÓMETRO PARA LA TOMA DE DATOS---###############
-#measurementTime: tiempo en minutos para la adquisión de datos.
-global measurementTime
-measurementTime=1
-sendTime=1      #tiempo para hacer la transmision [minutos]
+global measurementTime        #tiempo en minutos para la adquisión de datos.
+measurementTime=5
+sendTime=measurementTime      #tiempo para hacer la transmision [minutos]
 
 P8 = Pin('P8', mode=Pin.IN, pull=Pin.PULL_UP)
 machine.pin_deepsleep_wakeup([P8], machine.WAKEUP_ALL_LOW, True)
@@ -464,11 +460,8 @@ typeWrite="wb"
 while True:
     time.sleep(1)
     if wifiMain:
-        print('ingresa a la calibracion mediante WIFI')
-        time.sleep(1)
         wifi()
-        print('alarma activada al finalizar el wifi cada:',segM)
-        print('init program: new configFile after wifi configuration')
+        print('alarma activada al finalizar el wifi:',segM, 'new configFile:')
         config=configFile()
         print('config parameters: ',ustruct.unpack('HHHH',config))
         equationParameters=slope(config)
@@ -482,7 +475,6 @@ while True:
         else:
             segM=segAlarm()
             measurementAlarm = activeAlarmM(segM)
-
 
     if measurementMain:
         measurementMain=False
@@ -509,7 +501,6 @@ while True:
         writeFile(pathLogsWl,"ab",dateFile,recordWl)              #almacenamiento en el archivo diario
         #recordTemporal=ustruct.pack('HIH', IDWl,timeStamp_measurement, hX)        #Empaqueta: ID - timeStampEpoch - hX, archivos temporales para el envío
         writeFile(pathCurrentFile,typeWrite,'',recordWl)          #almacenamiento en el archivo temporal
-        #****************************************************************************************
 
         #leer datos int para corroborar el almacenamiento*********
         #*********************************************************
