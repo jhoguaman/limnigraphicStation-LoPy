@@ -154,13 +154,14 @@ pathLogsWl='/flash/logsDir/wl'
 pathLogsBl='/flash/logsDir/bl'
 pathCurrentFile='/flash/logsDir/currentFile'
 
-#clockSynchronization: Sincronización del rtc-LoPy con el dateTime recibido por el gps o ds1307
+########################----clockSynchronization----############################
+#Sincronización del rtc-LoPy con el dateTime recibido por el gps o ds1307
 def clockSynchronization(dateTime):
     rtc.init(dateTime)
     print(rtc.now())
 
-
-#configFile: lee los valores de configuracion de la memoria flash,
+##############################----configFile----################################
+#Lee los valores de configuracion de la memoria flash,
 #existen dos archivos de configuracion: wl400_00 y wl400_01, el 1ero se crea
 #por defecto con parámetros pre-establecidos, y el 2do se crea al momento de
 #calibrar el dispositivo por medio del wifi.
