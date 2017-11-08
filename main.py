@@ -45,7 +45,8 @@ _LORA_PKG_FORMAT = "BBB%ds"
 _LORA_PKG_ACK_FORMAT = "BBB"
 
 DEVICE_ID = 0x02
-PKG_TYPE = 0x01
+PKG_PAYLOAD = 0x00
+PKG_SINC=0x02
 
 lora = LoRa(mode=LoRa.LORA, frequency=915000000, tx_iq=True)
 lora_sock = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
@@ -298,7 +299,7 @@ def levelWaterUpdate(none):
     print(tStamp[:6])
     tStamp=str(tStamp[0])+'/'+str(tStamp[1])+'/'+str(tStamp[2])+' '+str(tStamp[3])+':'+str(tStamp[4])+':'+str(tStamp[5])
     msg=str(hX)
-    msg='-'+msg+' '+tStamp
+    msg=msg+'[mm] --- '+tStamp
     return True,msg
 ############################----finishCalibration----###########################
 def finishCalibration(none):
@@ -382,7 +383,7 @@ def ads1115Write(channel):
     data = ustruct.pack('>BBB', 0x01,channel,0x83)
     i2c.init()
     i2c.writeto(0x48, data)
-    time.sleep(0.5)
+    time.sleep(0.1)
     i2c.deinit()
 ################################----ads1115Read----#############################
 #Adquiere los datos analógicos de channel(habilitado en ads1115Write)
@@ -390,7 +391,6 @@ def ads1115Read():
     i2c.init()
     data = i2c.readfrom_mem(0x48, 0x00, 2 )
     i2c.deinit()
-    time.sleep(0.1)
     vX=ustruct.unpack('>H', data)[0]
     print(vX)
     return vX
@@ -403,6 +403,48 @@ def segAlarm():
     segM=minM*60-timeStampM[5]
     print('timeStampM:segAlarm',timeStampM)
     return segM
+
+#############################----LoRa-Interrupt----#############################
+#interrupt
+def lora_cb(lora):
+    print('lora_cb',rtc.now())
+    global volBatt, IDWl, timeStamp_measurement, hX
+    events = lora.events()
+    if events & LoRa.RX_PACKET_EVENT:
+        print('Lora packet received')
+        recv_pkg = lora_sock.recv(512)
+        if (len(recv_pkg) > 2):
+            recv_pkg_len = recv_pkg[1]
+            device_id, pkg_len, type_pkg, msg = ustruct.unpack(_LORA_PKG_FORMAT % recv_pkg_len, recv_pkg)
+            print (device_id, msg, type_pkg)
+
+            if device_id==0x02 and type_pkg==0x00:
+                print('transmision...')
+                pkg_transmit = ustruct.pack(">HIHH",IDWl,timeStamp_measurement,hX,volBatt)
+                pkg = ustruct.pack(_LORA_PKG_FORMAT % len(pkg_transmit), DEVICE_ID, len(pkg_transmit),PKG_PAYLOAD,pkg_transmit)  # type_pkg=0 paquete de datos
+                lora_sock.send(pkg)
+
+
+    if events & LoRa.TX_PACKET_EVENT:
+        print('Lora packet sent')
+
+
+
+def WiFiRun():
+    print('WiFiRun')
+    wifi()
+    config=configFile()
+    print('config parameters: ',ustruct.unpack('HHHH',config))
+    equationParameters=slope(config)
+    print('equationParameters',equationParameters)
+
+    segM=segAlarm()
+    if segM>15:
+        print('sleep after WiFiRun',segM-10)
+        deepsleep((segM-10)*1000)
+    else:
+        segM=segAlarm()
+        measurementAlarm = activeAlarmM(segM)
 
 ################################################################################
 ##################################-----MAIN-----################################
@@ -418,7 +460,7 @@ logsDir()
 
 ###########---CALIBRACIÓN DEL CRONÓMETRO PARA LA TOMA DE DATOS---###############
 global measurementTime        #tiempo en minutos para la adquisión de datos.
-measurementTime=5
+measurementTime=1
 sendTime=measurementTime      #tiempo para hacer la transmision [minutos]
 
 P8 = Pin('P8', mode=Pin.IN, pull=Pin.PULL_UP)
@@ -432,17 +474,16 @@ if machine.wake_reason()[0]==1:
     i=0
     while P8()==0:
         print('dentro del while')
-        pycom.rgbled(0x009999) # blue
+        pycom.rgbled(0xFFFF00) # yellow
         time.sleep(0.5)
         pycom.rgbled(False)
         time.sleep(0.5)
         i=i+1
         if i==3:
-            pycom.rgbled(0x009900) # RED
+            pycom.rgbled(0x00FF00) # green
             time.sleep(1)
             pycom.rgbled(False)
-            time.sleep(1)
-            wifiMain=True
+            WiFiRun()
 
 segM=segAlarm()     #segundos faltantes para los siguientes measurementTime(5min)
 if segM>15 and wifiMain==False:
@@ -452,30 +493,14 @@ if segM<=15 and wifiMain==False:
     segM=segAlarm()     #segundos faltantes para los siguientes measurementTime(5min)
     measurementAlarm = activeAlarmM(segM)   #activa la alarma cada segM
 
+lora.callback(trigger=(LoRa.RX_PACKET_EVENT | LoRa.TX_PACKET_EVENT), handler=lora_cb)
 transmissionMain=False
 measurementMain=False
 
 typeWrite="wb"
 
 while True:
-    time.sleep(1)
-    if wifiMain:
-        wifi()
-        print('alarma activada al finalizar el wifi:',segM, 'new configFile:')
-        config=configFile()
-        print('config parameters: ',ustruct.unpack('HHHH',config))
-        equationParameters=slope(config)
-        print('equationParameters',equationParameters)
-
-        wifiMain=False
-        segM=segAlarm()
-        if segM>15:
-            print('init sleep',segM-10)
-            deepsleep((segM-10)*1000)
-        else:
-            segM=segAlarm()
-            measurementAlarm = activeAlarmM(segM)
-
+    time.sleep(0.1)
     if measurementMain:
         measurementMain=False
         pycom.rgbled(0xFFFF99) # blue
@@ -500,7 +525,7 @@ while True:
         ##################################---STORAGE---########################################
         writeFile(pathLogsWl,"ab",dateFile,recordWl)              #almacenamiento en el archivo diario
         #recordTemporal=ustruct.pack('HIH', IDWl,timeStamp_measurement, hX)        #Empaqueta: ID - timeStampEpoch - hX, archivos temporales para el envío
-        writeFile(pathCurrentFile,typeWrite,'',recordWl)          #almacenamiento en el archivo temporal
+        #writeFile(pathCurrentFile,typeWrite,'',recordWl)          #almacenamiento en el archivo temporal
 
         #leer datos int para corroborar el almacenamiento*********
         #*********************************************************
@@ -514,8 +539,8 @@ while True:
         #leer datos int para corroborar el almacenamiento*********
         #*********************************************************
         #temporalFile=readFile(pathCurrentFile,'rb','')
-        tmFile=os.stat(pathCurrentFile)[6]
-        print('num de datos temporales:', tmFile/8)
+        ##tmFile=os.stat(pathCurrentFile)[6]
+        ##print('num de datos temporales:', tmFile/8)
         #fmt='IH'*(int(tmFile/6))
         #currentFileInt=ustruct.unpack(fmt,temporalFile)
         #print(currentFileInt) +++++datos almacenados
@@ -544,12 +569,13 @@ while True:
             deepsleep((segM-10)*1000)
 
     if transmissionMain:
-        print('TRANSMISION - LoRa')
-
+        print('waiting for channel assignation - LoRa')
+        print(rtc.now())
         ######################-----TRANSMISIÓN-LORA-----########################
-        pkg_transmit = ustruct.pack(">HIHH",IDWl,timeStamp_measurement,hX,volBatt)
-        pkg = ustruct.pack(_LORA_PKG_FORMAT % len(pkg_transmit), DEVICE_ID, len(pkg_transmit),0,pkg_transmit)  # type_pkg=0 paquete de datos
-        lora_sock.send(pkg)
+        #pkg_transmit = ustruct.pack(">HIHH",IDWl,timeStamp_measurement,hX,volBatt)
+        #pkg = ustruct.pack(_LORA_PKG_FORMAT % len(pkg_transmit), DEVICE_ID, len(pkg_transmit),0,pkg_transmit)  # type_pkg=0 paquete de datos
+        #lora_sock.send(pkg)
+        time.sleep(10)
         ########################################################################
 
         #leer datos int para corroborar el almacenamiento*********
