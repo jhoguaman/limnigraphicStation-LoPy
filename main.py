@@ -460,7 +460,7 @@ logsDir()
 
 ###########---CALIBRACIÓN DEL CRONÓMETRO PARA LA TOMA DE DATOS---###############
 global measurementTime        #tiempo en minutos para la adquisión de datos.
-measurementTime=1
+measurementTime=5
 sendTime=measurementTime      #tiempo para hacer la transmision [minutos]
 
 P8 = Pin('P8', mode=Pin.IN, pull=Pin.PULL_UP)
@@ -524,51 +524,14 @@ while True:
 
         ##################################---STORAGE---########################################
         writeFile(pathLogsWl,"ab",dateFile,recordWl)              #almacenamiento en el archivo diario
-        #recordTemporal=ustruct.pack('HIH', IDWl,timeStamp_measurement, hX)        #Empaqueta: ID - timeStampEpoch - hX, archivos temporales para el envío
-        #writeFile(pathCurrentFile,typeWrite,'',recordWl)          #almacenamiento en el archivo temporal
-
         #leer datos int para corroborar el almacenamiento*********
         #*********************************************************
-        #currentFileBin=readFile(pathLogsWl,'rb',dateFile)
         tmFile=os.stat(pathLogsWl+dateFile)[6]
         print('num de datos flash:', tmFile/8)
-        #fmt='H'*(int(tmFile/2))
-        #currentFileInt=ustruct.unpack(fmt,currentFileBin)
-        #print(currentFileInt) #+++++++++++++++datos almacenados
-        #*********************************************************
-        #leer datos int para corroborar el almacenamiento*********
-        #*********************************************************
-        #temporalFile=readFile(pathCurrentFile,'rb','')
-        ##tmFile=os.stat(pathCurrentFile)[6]
-        ##print('num de datos temporales:', tmFile/8)
-        #fmt='IH'*(int(tmFile/6))
-        #currentFileInt=ustruct.unpack(fmt,temporalFile)
-        #print(currentFileInt) +++++datos almacenados
-        #*********************************************************
         pycom.rgbled(False)
 
         ###############---VERIFICA EL sendTime PARA TRANSMITIR---##############
-        if (Date[4])/sendTime-int(Date[4]/sendTime)==0 and int(Date[5])==0:
-            transmissionMain=True
-            #if Date[4]==0:
-                #ads1115Write(_CHANNEL1)     #config the channel_1 for to read the battery
-                #batt=ads1115Read()
-                #volBatt=batteryLevel(batt)
-                #print('battery level:',batt)
 
-                #recordBl=ustruct.pack('IH', timeStamp_measurement,volBatt)        #empaqueta timeStamp_measurement(EPOCH) - batt
-                #writeFile(pathLogsBl,"ab",dateFile,recordBl)                      #almacenamiento en el archivo diario
-
-                #recordTemporalBl=ustruct.pack('HIH',IDBl, timeStamp_measurement,volBatt)        #empaqueta: timeStamp_measurement(EPOCH) - batt
-                #writeFile(pathCurrentFile,typeWrite,'',recordTemporalBl)          #almacenamiento en el archivo temporal
-
-        typeWrite="ab"
-        if transmissionMain==False:
-            segM=segAlarm()     #segundos que faltan para los siguientes measurementTime(5min)
-            print('sleep:',segM-10)
-            deepsleep((segM-10)*1000)
-
-    if transmissionMain:
         print('waiting for channel assignation - LoRa')
         print(rtc.now())
         ######################-----TRANSMISIÓN-LORA-----########################
@@ -577,19 +540,6 @@ while True:
         #lora_sock.send(pkg)
         time.sleep(10)
         ########################################################################
-
-        #leer datos int para corroborar el almacenamiento*********
-        #*********************************************************
-        #currentFileBin=readFile(pathCurrentFile,'rb','')
-        #tmFile=os.stat('logsDir/currentFile')[6]        #number of bytes
-        #print('# bytes a trasnmitir:', tmFile)
-        #fmt='IH'*(int(tmFile/6))
-        #currentFileInt=ustruct.unpack(fmt,currentFileBin)
-        #print(currentFileInt)
-        #*********************************************************
-        #loraTransmission(currentFileBin)
-        typeWrite="wb"
-        transmissionMain=False
 
         segM=segAlarm()     #segundos que faltan para los siguientes measurementTime(5min)
         print('sleep:',segM-10)
