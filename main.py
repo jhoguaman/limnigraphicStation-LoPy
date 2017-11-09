@@ -44,6 +44,7 @@ IDBl=(int('0b'+stationId_bits+sensorIdBl_bits,2))
 _LORA_PKG_FORMAT = "BBB%ds"
 _LORA_PKG_ACK_FORMAT = "BBB"
 
+###########################---Node-Parameters---################################
 DEVICE_ID = 0x02
 PKG_PAYLOAD = 0x00
 PKG_SINC=0x02
@@ -418,11 +419,17 @@ def lora_cb(lora):
             device_id, pkg_len, type_pkg, msg = ustruct.unpack(_LORA_PKG_FORMAT % recv_pkg_len, recv_pkg)
             print (device_id, msg, type_pkg)
 
-            if device_id==0x02 and type_pkg==0x00:
+            if device_id==DEVICE_ID and type_pkg==PKG_PAYLOAD:
                 print('transmision...')
                 pkg_transmit = ustruct.pack(">HIHH",IDWl,timeStamp_measurement,hX,volBatt)
                 pkg = ustruct.pack(_LORA_PKG_FORMAT % len(pkg_transmit), DEVICE_ID, len(pkg_transmit),PKG_PAYLOAD,pkg_transmit)  # type_pkg=0 paquete de datos
                 lora_sock.send(pkg)
+
+            if device_id==0xFF and type_pkg==PKG_SINC:
+                print('received sinc...',msg)
+                dateTime=time.gmtime(ustruct.unpack('I',msg)[0])
+                clockSynchronization(dateTime)
+                ds1307init_sinc()
 
 
     if events & LoRa.TX_PACKET_EVENT:
